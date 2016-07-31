@@ -17,8 +17,6 @@
 
 #include <cassert>
 
-// #include <iostream>
-
 namespace args {
 
 template<int N>
@@ -189,7 +187,8 @@ context build_context(T& cmd)
         arg.write_value = [&x](const std::string& s) { write_value_to(x, s); };
         arg.type = get_argument_type(x);
         each_arg(overload(
-            [&](const std::string& name) { arg.flags.push_back(name); }
+            [&](const std::string& name) { arg.flags.push_back(name); },
+            [&](auto&& attribute) -> decltype(attribute(ctx, arg)) { return attribute(ctx, arg); }
         ), std::forward<decltype(xs)>(xs)...);
         ctx.add(std::move(arg));
     });

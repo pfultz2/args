@@ -28,6 +28,14 @@ PROVE_CASE()
 PROVE_CASE()
 {
     hello cmd;
+    args::parse(cmd, {"--count", "5"});
+    PROVE_CHECK(cmd.count == 5);
+    PROVE_CHECK(cmd.name == "");
+}
+
+PROVE_CASE()
+{
+    hello cmd;
     args::parse(cmd, {"--count=5", "--name=hello"});
     PROVE_CHECK(cmd.count == 5);
     PROVE_CHECK(cmd.name == "hello");

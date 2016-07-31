@@ -145,22 +145,17 @@ struct context
     std::unordered_map<std::string, int> lookup;
 
     std::unordered_multimap<int, std::string> raw_options;
-    std::vector<std::string> raw_arguments;
 
     void add(argument arg)
     {
-        for(auto&& name:arg.flags) lookup[name] = arguments.size();
+        if (arg.flags.empty()) lookup[""] = arguments.size();
+        else for(auto&& name:arg.flags) lookup[name] = arguments.size();
         arguments.emplace_back(std::move(arg));
     }
 
     void add_raw_option(const std::string& name, const std::string& value)
     {
         raw_options.emplace(lookup.at(name), value);
-    }
-
-    void add_raw_argument(const std::string& name)
-    {
-        raw_arguments.push_back(name);
     }
 
     argument& operator[](const std::string& flag)
@@ -193,7 +188,7 @@ context build_context(T& cmd)
         arg.type = get_argument_type(x);
         each_arg(overload(
             [&](const std::string& name) { arg.flags.push_back(name); },
-            [&](auto&& attribute) -> decltype(attribute(ctx, arg)) { return attribute(ctx, arg); }
+            [&](auto&& attribute) -> decltype(attribute(ctx, arg)) { return attribute(x, ctx, arg); }
         ), std::forward<decltype(xs)>(xs)...);
         ctx.add(std::move(arg));
     });
@@ -257,7 +252,7 @@ void parse(T& cmd, std::vector<std::string> a)
         }
         else
         {
-            ctx.add_raw_argument(x);
+            ctx.add_raw_option("", x);
         }
     }
     ctx.post_process();

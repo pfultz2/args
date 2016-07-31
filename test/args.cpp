@@ -154,3 +154,59 @@ PROVE_CASE()
     args::parse(cmd, {"--null", "--name=hello"});
     PROVE_CHECK(cmd.name == "hello");
 }
+
+struct arguments_cmd
+{
+    int count;
+    std::vector<std::string> names;
+
+    template<class F>
+    void parse(F f)
+    {
+        f(count, "--count", "-C");
+        f(names);
+    }
+
+    void run()
+    {}
+};
+
+PROVE_CASE()
+{
+    arguments_cmd cmd;
+    args::parse(cmd, {"1", "2", "3", "--count", "5"});
+    PROVE_CHECK(cmd.count == 5);
+    PROVE_CHECK(cmd.names[0] == "1");
+    PROVE_CHECK(cmd.names[1] == "2");
+    PROVE_CHECK(cmd.names[2] == "3");
+}
+
+PROVE_CASE()
+{
+    arguments_cmd cmd;
+    args::parse(cmd, {"--count", "5", "1", "2", "3"});
+    PROVE_CHECK(cmd.count == 5);
+    PROVE_CHECK(cmd.names[0] == "1");
+    PROVE_CHECK(cmd.names[1] == "2");
+    PROVE_CHECK(cmd.names[2] == "3");
+}
+
+PROVE_CASE()
+{
+    arguments_cmd cmd;
+    args::parse(cmd, {"--count=5", "1", "2", "3"});
+    PROVE_CHECK(cmd.count == 5);
+    PROVE_CHECK(cmd.names[0] == "1");
+    PROVE_CHECK(cmd.names[1] == "2");
+    PROVE_CHECK(cmd.names[2] == "3");
+}
+
+PROVE_CASE()
+{
+    arguments_cmd cmd;
+    args::parse(cmd, {"-C5", "1", "2", "3"});
+    PROVE_CHECK(cmd.count == 5);
+    PROVE_CHECK(cmd.names[0] == "1");
+    PROVE_CHECK(cmd.names[1] == "2");
+    PROVE_CHECK(cmd.names[2] == "3");
+}

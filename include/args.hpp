@@ -36,7 +36,7 @@ using std::end;
 
 template<class T>
 auto is_container(args::rank<1>, T&& x) -> decltype(
-    x.insert(--end(x), *begin(x)), std::true_type{}
+    x.insert(end(x), *begin(x)), std::true_type{}
 )
 {
     return {};
@@ -108,7 +108,7 @@ void write_value_to(T& result, const std::string& x)
 template<class T, typename std::enable_if<(is_container<T>{} and not std::is_convertible<T, std::string>{}), int>::type = 0>
 void write_value_to(T& result, const std::string& x)
 {
-    result.insert(--result.end(), value_parser<typename T::value_type>::apply(x));
+    result.insert(result.end(), value_parser<typename T::value_type>::apply(x));
 }
 
 enum class argument_type

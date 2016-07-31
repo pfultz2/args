@@ -132,3 +132,25 @@ PROVE_CASE()
     PROVE_CHECK(cmd.names[1] == "2");
     PROVE_CHECK(cmd.names[2] == "3");
 }
+
+struct no_data
+{
+    std::string name;
+
+    template<class F>
+    void parse(F f)
+    {
+        f(nullptr, "--null");
+        f(name, "--name", "-N");
+    }
+
+    void run()
+    {}
+};
+
+PROVE_CASE()
+{
+    no_data cmd;
+    args::parse(cmd, {"--null", "--name=hello"});
+    PROVE_CHECK(cmd.name == "hello");
+}

@@ -109,6 +109,11 @@ void write_value_to(T& result, const std::string& x)
     result.insert(result.end(), value_parser<typename T::value_type>::apply(x));
 }
 
+void write_value_to(std::nullptr_t, const std::string&)
+{
+    // Do nothing
+}
+
 enum class argument_type
 {
     none,
@@ -181,7 +186,7 @@ template<class T>
 context build_context(T& cmd)
 {
     context ctx;
-    cmd.parse([&](auto& x, auto&&... xs)
+    cmd.parse([&](auto&& x, auto&&... xs)
     {
         argument arg;
         arg.write_value = [&x](const std::string& s) { write_value_to(x, s); };

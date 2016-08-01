@@ -210,3 +210,70 @@ PROVE_CASE()
     PROVE_CHECK(cmd.names[1] == "2");
     PROVE_CHECK(cmd.names[2] == "3");
 }
+
+struct callback_cmd
+{
+    int count;
+    std::string name;
+    std::string final_name;
+
+    template<class F>
+    void parse(F f)
+    {
+        auto cb = [this](auto& count, const args::context& ctx, const args::argument& arg) {
+            if (arg.has_value) for(int i=0;i<count;i++) final_name += name;
+        };
+        f(count, "--count", "-C", args::callback(cb));
+        f(name, "--name", "-N");
+    }
+
+    void run()
+    {}
+};
+
+PROVE_CASE()
+{
+    callback_cmd cmd;
+    args::parse(cmd, {"--count", "5", "--name", "hello"});
+    PROVE_CHECK(cmd.count == 5);
+    PROVE_CHECK(cmd.name == "hello");
+    PROVE_CHECK(cmd.final_name == "hellohellohellohellohello");
+}
+
+PROVE_CASE()
+{
+    callback_cmd cmd{};
+    args::parse(cmd, {"--name", "hello"});
+    PROVE_CHECK(cmd.count == 0);
+    PROVE_CHECK(cmd.name == "hello");
+    PROVE_CHECK(cmd.final_name == "");
+}
+
+struct eager_callback_cmd
+{
+    int count;
+    std::string name;
+    std::string final_out;
+
+    template<class F>
+    void parse(F f)
+    {
+        auto cb = [this](auto& count, const args::context& ctx, const args::argument& arg) {
+            final_out = std::to_string(count);
+        };
+        f(count, "--count", "-C", args::eager_callback(cb));
+        f(name, "--name", "-N");
+    }
+
+    void run()
+    {}
+};
+
+PROVE_CASE()
+{
+    eager_callback_cmd cmd;
+    args::parse(cmd, {"--count", "5", "--name", "hello"});
+    PROVE_CHECK(cmd.count == 5);
+    PROVE_CHECK(cmd.name == "");
+    PROVE_CHECK(cmd.final_out == "5");
+}

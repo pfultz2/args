@@ -134,8 +134,31 @@ struct argument
     argument_type type;
     std::vector<std::string> flags;
 
+    bool has_value = false;
     std::function<void(const std::string&)> write_value;
+    std::vector<std::function<void(const argument&)>> callbacks;
+    std::vector<std::function<void(const argument&)>> eager_callbacks;
     std::unordered_map<std::string, std::string> data;
+
+    template<class F>
+    void add_callback(F f)
+    {
+        callbacks.push_back(f);
+    }
+
+    template<class F>
+    void add_eager_callback(F f)
+    {
+        eager_callbacks.push_back(f);
+    }
+
+    bool write(const std::string& s)
+    {
+        write_value(s);
+        has_value = true;
+        for(auto&& f:eager_callbacks) f(*this);
+        return not eager_callbacks.empty();
+    }
 
 };
 
@@ -144,18 +167,11 @@ struct context
     std::vector<argument> arguments;
     std::unordered_map<std::string, int> lookup;
 
-    std::unordered_multimap<int, std::string> raw_options;
-
     void add(argument arg)
     {
         if (arg.flags.empty()) lookup[""] = arguments.size();
         else for(auto&& name:arg.flags) lookup[name] = arguments.size();
         arguments.emplace_back(std::move(arg));
-    }
-
-    void add_raw_option(const std::string& name, const std::string& value)
-    {
-        raw_options.emplace(lookup.at(name), value);
     }
 
     argument& operator[](const std::string& flag)
@@ -170,9 +186,9 @@ struct context
 
     void post_process()
     {
-        for(auto&& p:raw_options)
+        for(auto&& arg:arguments)
         {
-            arguments[p.first].write_value(p.second);
+            for(auto&& f:arg.callbacks) f(arg);
         }
     }
 };
@@ -188,7 +204,7 @@ context build_context(T& cmd)
         arg.type = get_argument_type(x);
         each_arg(overload(
             [&](const std::string& name) { arg.flags.push_back(name); },
-            [&](auto&& attribute) -> decltype(attribute(ctx, arg)) { return attribute(x, ctx, arg); }
+            [&](auto&& attribute) -> decltype(attribute(x, ctx, arg), void()) { attribute(x, ctx, arg); }
         ), std::forward<decltype(xs)>(xs)...);
         ctx.add(std::move(arg));
     });
@@ -238,7 +254,7 @@ void parse(T& cmd, std::vector<std::string> a)
             if (ctx[core].type == argument_type::none or not value.empty())
             {
                 capture = false;
-                ctx.add_raw_option(core, value);
+                if (ctx[core].write(value)) return;
             }
             else
             {
@@ -247,26 +263,50 @@ void parse(T& cmd, std::vector<std::string> a)
         }
         else if (capture)
         {
-            ctx.add_raw_option(core, x);
+            if (ctx[core].write(x)) return;
             capture = ctx[core].type == argument_type::multiple;
         }
         else
         {
-            ctx.add_raw_option("", x);
+            if (ctx[""].write(x)) return;
         }
     }
     ctx.post_process();
-
+    
     cmd.run();
 }
 
 template<class T>
 void parse(std::vector<std::string> a)
 {
+    // TODO: zero initialize T
     T cmd;
     parse(cmd, std::move(a));
 }
 
+template<class F>
+auto callback(F f)
+{
+    return [f](auto&& data, context& ctx, argument& a)
+    {
+        a.add_callback([f, &ctx, &data](const argument& arg)
+        {
+            f(data, ctx, arg);
+        });
+    };
+}
+
+template<class F>
+auto eager_callback(F f)
+{
+    return [f](auto&& data, context& ctx, argument& a)
+    {
+        a.add_eager_callback([f, &data, &ctx](const argument& arg)
+        {
+            f(data, ctx, arg);
+        });
+    };
+}
 
 } // namespace args
 

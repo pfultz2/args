@@ -122,10 +122,10 @@ enum class argument_type
 };
 
 template<class T>
-argument_type get_argument_type(T& x)
+argument_type get_argument_type(T&)
 {
-    if (std::is_same<T, bool>{}) return argument_type::none;
-    else if (is_container<T>{}) return argument_type::multiple;
+    if (std::is_same<T, bool>() or std::is_same<T, std::nullptr_t>()) return argument_type::none;
+    else if (is_container<T>()) return argument_type::multiple;
     else return argument_type::single;
 }
 
@@ -143,13 +143,13 @@ struct argument
     template<class F>
     void add_callback(F f)
     {
-        callbacks.push_back(f);
+        callbacks.emplace_back(std::move(f));
     }
 
     template<class F>
     void add_eager_callback(F f)
     {
-        eager_callbacks.push_back(f);
+        eager_callbacks.emplace_back(std::move(f));
     }
 
     bool write(const std::string& s)
@@ -272,7 +272,7 @@ void parse(T& cmd, std::vector<std::string> a)
         }
     }
     ctx.post_process();
-    
+
     cmd.run();
 }
 

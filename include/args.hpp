@@ -38,6 +38,12 @@ using std::begin;
 using std::end;
 
 template<class T>
+auto adl_begin(T&& x) -> decltype(begin(x))
+{
+    return begin(x);
+}
+
+template<class T>
 auto is_container(args::rank<1>, T&& x) -> decltype(
     x.insert(end(x), *begin(x)), std::true_type{}
 )
@@ -59,6 +65,9 @@ template<class T>
 struct is_container
 : decltype(adl_args::is_container(args::rank<1>{}, std::declval<T>()))
 {};
+
+template<class Range>
+using value_of = std::decay_t<decltype(*adl_args::adl_begin(std::declval<Range>()))>;
 
 template<class F1, class... Fs>
 struct overload_set : F1, overload_set<Fs...>
@@ -166,11 +175,33 @@ enum class argument_type
 };
 
 template<class T>
-argument_type get_argument_type(T&)
+argument_type get_argument_type(const T&)
 {
     if (std::is_same<T, bool>() or std::is_same<T, std::nullptr_t>()) return argument_type::none;
     else if (is_container<T>()) return argument_type::multiple;
     else return argument_type::single;
+}
+
+template<class T>
+std::string type_to_help_impl(rank<0>)
+{
+    if (std::is_same<T, bool>()) return "bool";
+    else if (std::is_convertible<T, std::string>()) return "string";
+    else if (std::is_integral<T>()) return "integer";
+    else if (std::is_floating_point<T>()) return "number";
+    else return "argument";
+}
+
+template<class T>
+auto type_to_help_impl(rank<1>) -> typename std::enable_if<(is_container<T>() and not std::is_convertible<T, std::string>()), std::string>::type
+{
+    if (is_container<T>()) return type_to_help_impl<value_of<T>>(rank<1>{}) + "...";
+}
+
+template<class T>
+std::string type_to_help(const T&)
+{
+    return "[" + type_to_help_impl<T>(rank<1>{}) + "]";
 }
 
 struct argument
@@ -182,7 +213,7 @@ struct argument
     std::function<void(const std::string&)> write_value;
     std::vector<std::function<void(const argument&)>> callbacks;
     std::vector<std::function<void(const argument&)>> eager_callbacks;
-    std::string help;
+    std::string help, metavar;
 
     std::unordered_map<std::string, std::string> data;
 
@@ -200,7 +231,9 @@ struct argument
 
     std::string get_flags() const
     {
-        return join(flags, ", ");
+        std::string result = join(flags, ", ");
+        if (type != argument_type::none) result += " " + metavar;
+        return result;
     }
 
     bool write(const std::string& s)
@@ -231,6 +264,7 @@ struct context
         argument arg;
         arg.write_value = [&x](const std::string& s) { write_value_to(x, s); };
         arg.type = get_argument_type(x);
+        arg.metavar = type_to_help(x);
         each_arg(overload(
             [&, this](const std::string& name) { arg.flags.push_back(name); },
             [&, this](auto&& attribute) -> decltype(attribute(x, *this, arg), void()) { attribute(x, *this, arg); }
@@ -250,18 +284,35 @@ struct context
 
     void show_help(std::string name, std::string description) const
     {
-        std::cout << "Usage: " << name << " [OPTIONS] ARGUMENTS\n" << std::endl;
-        for(auto line:wrap(description, 80)) std::cout << line << std::endl;
-        std::cout << std::endl;
-        std::cout << "Options: " << std::endl;
+        const int total_width = 80;
+        std::vector<std::string> flags;
+        int width = 0;
         for(auto&& arg:arguments)
         {
-            auto txt = wrap(arg.help, 60);
+            std::string flag = arg.get_flags();
+            width = std::max(width, int(flag.size()));
+            flags.push_back(std::move(flag));
+        }
+        std::cout << "Usage: " << name << " [options...]";
+
+        if (lookup.count("") > 0)
+        {
+            std::cout << " " << (*this)[""].metavar;
+        }
+        
+        std::cout << std::endl;
+        std::cout << std::endl;
+        for(auto line:wrap(description, total_width-2)) std::cout << "  " << line << std::endl;
+        std::cout << std::endl;
+        std::cout << "Options: " << std::endl << std::endl;
+        for(auto&& arg:arguments)
+        {
+            auto txt = wrap(arg.help, total_width-width-2);
             assert(!txt.empty());
-            std::cout << std::setw(20) << arg.get_flags() << " " << txt[0] << std::endl;
+            std::cout << " " << std::setw(width) << arg.get_flags() << " " << txt[0] << std::endl;
             std::for_each(txt.begin()+1, txt.end(), [&](std::string line)
             {
-                std::cout << std::setw(20) << " " << " " << line << std::endl;
+                std::cout << " " << std::setw(width) << " " << " " << line << std::endl;
             });
         }
         std::cout << std::endl;
@@ -300,13 +351,18 @@ auto eager_callback(F f)
     };
 }
 
-auto help(std::string txt)
-{
-    return [txt](auto&&, context&, argument& a)
-    {
-        a.help = txt;
-    };
+#define ARGS_SET_ARG(name) \
+template<class T> \
+auto name(T&& x) \
+{ \
+    return [=](auto&&, context&, argument& a) \
+    { \
+        a.name = x; \
+    }; \
 }
+
+ARGS_SET_ARG(help);
+ARGS_SET_ARG(metavar);
 
 template<class T>
 context build_context(T& cmd)

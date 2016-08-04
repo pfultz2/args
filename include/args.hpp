@@ -14,6 +14,11 @@
 #include <vector>
 #include <initializer_list>
 #include <functional>
+#include <algorithm>
+#include <numeric>
+
+#include <iostream>
+#include <iomanip>
 
 #include <cassert>
 
@@ -84,6 +89,45 @@ void each_arg(F f, Ts&&... xs)
     (void)std::initializer_list<int>{((void)f(std::forward<Ts>(xs)), 0)...};     
 }
 
+std::vector<std::string> wrap(const std::string& text, int line_length = 72)
+{
+    std::vector<std::string> output;
+    std::istringstream iss(text);
+
+    std::string line;
+
+    do
+    {
+        std::string word;
+        iss >> word;
+
+        if (line.length() + word.length() > line_length)
+        {
+            output.push_back(line);
+            line.clear();
+        }
+        line += word + " ";
+
+    } while (iss);
+
+    if (!line.empty())
+    {
+        output.push_back(line);
+    }
+    return output;
+}
+
+template<class Range>
+std::string join(Range&& r, std::string delim)
+{
+    return std::accumulate(std::begin(r), std::end(r), std::string(), [&](const std::string &x, const std::string &y)
+    {
+        if (x.empty()) return y;
+        if (y.empty()) return x;
+        return x + delim + y;
+    });
+}
+
 template<class T>
 struct value_parser
 {
@@ -138,6 +182,8 @@ struct argument
     std::function<void(const std::string&)> write_value;
     std::vector<std::function<void(const argument&)>> callbacks;
     std::vector<std::function<void(const argument&)>> eager_callbacks;
+    std::string help;
+
     std::unordered_map<std::string, std::string> data;
 
     template<class F>
@@ -150,6 +196,11 @@ struct argument
     void add_eager_callback(F f)
     {
         eager_callbacks.emplace_back(std::move(f));
+    }
+
+    std::string get_flags() const
+    {
+        return join(flags, ", ");
     }
 
     bool write(const std::string& s)
@@ -174,6 +225,19 @@ struct context
         arguments.emplace_back(std::move(arg));
     }
 
+    template<class T, class... Ts>
+    void parse(T&& x, Ts&&... xs)
+    {
+        argument arg;
+        arg.write_value = [&x](const std::string& s) { write_value_to(x, s); };
+        arg.type = get_argument_type(x);
+        each_arg(overload(
+            [&, this](const std::string& name) { arg.flags.push_back(name); },
+            [&, this](auto&& attribute) -> decltype(attribute(x, *this, arg), void()) { attribute(x, *this, arg); }
+        ), std::forward<Ts>(xs)...);
+        this->add(std::move(arg));
+    }
+
     argument& operator[](const std::string& flag)
     {
         return arguments[lookup.at(flag)];
@@ -182,6 +246,25 @@ struct context
     const argument& operator[](const std::string& flag) const
     {
         return arguments[lookup.at(flag)];
+    }
+
+    void show_help(std::string name, std::string description) const
+    {
+        std::cout << "Usage: " << name << " [OPTIONS] ARGUMENTS\n" << std::endl;
+        for(auto line:wrap(description, 80)) std::cout << line << std::endl;
+        std::cout << std::endl;
+        std::cout << "Options: " << std::endl;
+        for(auto&& arg:arguments)
+        {
+            auto txt = wrap(arg.help, 60);
+            assert(!txt.empty());
+            std::cout << std::setw(20) << arg.get_flags() << " " << txt[0] << std::endl;
+            std::for_each(txt.begin()+1, txt.end(), [&](std::string line)
+            {
+                std::cout << std::setw(20) << " " << " " << line << std::endl;
+            });
+        }
+        std::cout << std::endl;
     }
 
     void post_process()
@@ -193,20 +276,50 @@ struct context
     }
 };
 
+template<class F>
+auto callback(F f)
+{
+    return [f](auto&& data, context& ctx, argument& a)
+    {
+        a.add_callback([f, &ctx, &data](const argument& arg)
+        {
+            f(data, ctx, arg);
+        });
+    };
+}
+
+template<class F>
+auto eager_callback(F f)
+{
+    return [f](auto&& data, context& ctx, argument& a)
+    {
+        a.add_eager_callback([f, &data, &ctx](const argument& arg)
+        {
+            f(data, ctx, arg);
+        });
+    };
+}
+
+auto help(std::string txt)
+{
+    return [txt](auto&&, context&, argument& a)
+    {
+        a.help = txt;
+    };
+}
+
 template<class T>
 context build_context(T& cmd)
 {
     context ctx;
-    cmd.parse([&](auto&& x, auto&&... xs)
+    ctx.parse(nullptr, "-h", "--help", args::help("Show help"), 
+        eager_callback([](std::nullptr_t, const context& c, const argument&)
     {
-        argument arg;
-        arg.write_value = [&x](const std::string& s) { write_value_to(x, s); };
-        arg.type = get_argument_type(x);
-        each_arg(overload(
-            [&](const std::string& name) { arg.flags.push_back(name); },
-            [&](auto&& attribute) -> decltype(attribute(x, ctx, arg), void()) { attribute(x, ctx, arg); }
-        ), std::forward<decltype(xs)>(xs)...);
-        ctx.add(std::move(arg));
+        c.show_help("program", "This program");
+    }));
+    cmd.parse([&](auto&&... xs)
+    {
+        ctx.parse(std::forward<decltype(xs)>(xs)...);
     });
     return ctx;
 }
@@ -249,6 +362,7 @@ void parse(T& cmd, std::vector<std::string> a)
     {
         if (x[0] == '-')
         {
+            // TODO: Check if flag exists
             std::string value;
             std::tie(core, value) = parse_attached_value(x);
             if (ctx[core].type == argument_type::none or not value.empty())
@@ -282,30 +396,6 @@ void parse(std::vector<std::string> a)
     // TODO: zero initialize T
     T cmd;
     parse(cmd, std::move(a));
-}
-
-template<class F>
-auto callback(F f)
-{
-    return [f](auto&& data, context& ctx, argument& a)
-    {
-        a.add_callback([f, &ctx, &data](const argument& arg)
-        {
-            f(data, ctx, arg);
-        });
-    };
-}
-
-template<class F>
-auto eager_callback(F f)
-{
-    return [f](auto&& data, context& ctx, argument& a)
-    {
-        a.add_eager_callback([f, &data, &ctx](const argument& arg)
-        {
-            f(data, ctx, arg);
-        });
-    };
 }
 
 } // namespace args

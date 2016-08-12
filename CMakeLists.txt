@@ -28,4 +28,8 @@ include(CTest)
 
 include_directories(include)
 
-add_test_executable(args)
+file(GLOB TESTS test/*.cpp)
+foreach(TEST ${TESTS})
+    get_filename_component(BASE_NAME ${TEST} NAME_WE)
+    add_test_executable(${BASE_NAME} ${TEST})
+endforeach()

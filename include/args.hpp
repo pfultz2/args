@@ -210,6 +210,7 @@ struct argument
     std::vector<std::string> flags;
 
     bool has_value = false;
+    bool required = false;
     std::function<void(const std::string&)> write_value;
     std::vector<std::function<void(const argument&)>> callbacks;
     std::vector<std::function<void(const argument&)>> eager_callbacks;
@@ -293,6 +294,7 @@ struct context
             width = std::max(width, int(flag.size()));
             flags.push_back(std::move(flag));
         }
+        // TODO: Add metavar for options as well
         std::cout << "Usage: " << name << " [options...]";
 
         if (lookup.count("") > 0)
@@ -305,6 +307,7 @@ struct context
         for(auto line:wrap(description, total_width-2)) std::cout << "  " << line << std::endl;
         std::cout << std::endl;
         std::cout << "Options: " << std::endl << std::endl;
+        // TODO: Switch to different format when width > 40
         for(auto&& arg:arguments)
         {
             auto txt = wrap(arg.help, total_width-width-2);
@@ -359,6 +362,19 @@ auto name(T&& x) \
     { \
         a.name = x; \
     }; \
+}
+
+auto required()
+{
+    return [](auto&&, context&, argument& a)
+    {
+        a.required = true;
+        a.add_callback([](const argument& arg)
+        {
+            if (arg.required and !arg.has_value)
+                throw std::runtime_error("required arg missing: " + arg.get_flags());
+        });
+    };
 }
 
 ARGS_SET_ARG(help);

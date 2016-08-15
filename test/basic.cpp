@@ -210,3 +210,20 @@ PROVE_CASE()
     PROVE_CHECK(cmd.names[1] == "2");
     PROVE_CHECK(cmd.names[2] == "3");
 }
+
+struct no_args_cmd
+{
+    bool check = false;
+
+    void run()
+    {
+        check = true;
+    }
+};
+
+PROVE_CASE()
+{
+    no_args_cmd cmd;
+    args::parse(cmd, {});
+    PROVE_CHECK(cmd.check);
+}

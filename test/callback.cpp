@@ -10,7 +10,7 @@ struct callback_cmd
     template<class F>
     void parse(F f)
     {
-        auto cb = [this](auto& count, const args::context&, const args::argument& arg) {
+        auto cb = [this](auto& count, const auto&, const args::argument& arg) {
             if (arg.has_value) for(int i=0;i<count;i++) final_name += name;
         };
         f(count, "--count", "-C", args::callback(cb));
@@ -48,7 +48,7 @@ struct eager_callback_cmd
     template<class F>
     void parse(F f)
     {
-        auto cb = [this](auto& count, const args::context&, const args::argument&) {
+        auto cb = [this](auto& count, const auto&, const args::argument&) {
             final_out = std::to_string(count);
         };
         f(count, "--count", "-C", args::eager_callback(cb));
@@ -77,7 +77,7 @@ struct eager_callback_null_cmd
     template<class F>
     void parse(F f)
     {
-        auto cb = [this](auto&&, const args::context&, const args::argument&) {
+        auto cb = [this](auto&&, const auto&, const args::argument&) {
             final_out = "hello";
         };
         f(nullptr, "--out", "-O", args::eager_callback(cb));

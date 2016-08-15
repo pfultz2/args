@@ -11,7 +11,9 @@
 #include <string>
 #include <sstream>
 #include <unordered_map>
+#include <map>
 #include <vector>
+#include <deque>
 #include <initializer_list>
 #include <functional>
 #include <algorithm>
@@ -21,6 +23,8 @@
 #include <iomanip>
 
 #include <cassert>
+
+#define ARGS_RETURNS(...) -> decltype(__VA_ARGS__) { return (__VA_ARGS__); }
 
 namespace args {
 
@@ -38,10 +42,7 @@ using std::begin;
 using std::end;
 
 template<class T>
-auto adl_begin(T&& x) -> decltype(begin(x))
-{
-    return begin(x);
-}
+auto adl_begin(T&& x) ARGS_RETURNS(begin(x));
 
 template<class T>
 auto is_container(args::rank<1>, T&& x) -> decltype(
@@ -137,6 +138,61 @@ std::string join(Range&& r, std::string delim)
     });
 }
 
+template<class Predicate>
+std::string trim(const std::string &s, Predicate p)
+{
+   auto wsfront = std::find_if_not(s.begin(), s.end(), p);
+   auto wsback = std::find_if_not(s.rbegin(), s.rend(), p).base();
+   return (wsback<=wsfront ? std::string() : std::string(wsfront, wsback));
+}
+
+template<class Args_Probe_TypeName_>
+const std::string& get_type_name()
+{
+    static std::string name;
+
+    if (name.empty())
+    {
+#ifdef _MSC_VER
+        name = typeid(Args_Probe_TypeName_).name();
+        name = name.substr(7);
+#else
+        const char parameter_name[] = "Args_Probe_TypeName_ =";
+        name = __PRETTY_FUNCTION__;
+
+        auto begin = name.find(parameter_name) + sizeof(parameter_name);
+        auto length = name.find_first_of("];", begin) - begin;
+
+        name = name.substr(begin, length);
+#endif
+    }
+
+    return name;
+}
+
+#define ARGS_GET_CMD_ATTRIBUTE(name, ...) \
+namespace detail { \
+template<class T> \
+auto get_ ## name ## _impl(rank<1>) ARGS_RETURNS(T::name()) \
+template<class T> \
+auto get_ ## name ## _impl(rank<0>) ARGS_RETURNS(__VA_ARGS__); \
+} \
+template<class T> \
+auto get_ ## name() ARGS_RETURNS(detail::get_ ## name ## _impl<T>(rank<1>{}));
+
+template<class T>
+std::string get_command_type_name()
+{
+    std::string name = get_type_name<T>();
+    auto i = name.find("::");
+    if (i != std::string::npos) name = name.substr(i+2);
+    return trim(name, [](char c) { return c == '_'; });
+}
+
+ARGS_GET_CMD_ATTRIBUTE(name, get_command_type_name<T>());
+ARGS_GET_CMD_ATTRIBUTE(help, "");
+ARGS_GET_CMD_ATTRIBUTE(options_metavar, "[options...]");
+
 template<class T>
 struct value_parser
 {
@@ -216,8 +272,6 @@ struct argument
     std::vector<std::function<void(const argument&)>> eager_callbacks;
     std::string help, metavar;
 
-    std::unordered_map<std::string, std::string> data;
-
     template<class F>
     void add_callback(F f)
     {
@@ -247,10 +301,21 @@ struct argument
 
 };
 
+template<class... Args>
+struct subcommand
+{
+    std::string help;
+    std::function<void(std::deque<std::string>, Args...)> run;
+};
+
+template<class... Args>
 struct context
 {
+    using subcommand = subcommand<Args...>;
+    using subcommand_map = std::map<std::string, subcommand>;
     std::vector<argument> arguments;
     std::unordered_map<std::string, int> lookup;
+    subcommand_map subcommands;
 
     void add(argument arg)
     {
@@ -283,7 +348,18 @@ struct context
         return arguments[lookup.at(flag)];
     }
 
-    void show_help(std::string name, std::string description) const
+    void show_help_col(std::string item, std::string help, int width, int total_width) const
+    {
+        auto txt = wrap(help, total_width-width-2);
+        assert(!txt.empty());
+        std::cout << " " << std::setw(width) << item << " " << txt[0] << std::endl;
+        std::for_each(txt.begin()+1, txt.end(), [&](std::string line)
+        {
+            std::cout << " " << std::setw(width) << " " << " " << line << std::endl;
+        });
+    }
+
+    void show_help(std::string name, std::string description, std::string options_metavar) const
     {
         const int total_width = 80;
         std::vector<std::string> flags;
@@ -294,13 +370,11 @@ struct context
             width = std::max(width, int(flag.size()));
             flags.push_back(std::move(flag));
         }
-        // TODO: Add metavar for options as well
-        std::cout << "Usage: " << name << " [options...]";
+        for(auto&& p:subcommands) width = std::max(width, int(p.first.size()));
+        std::cout << "Usage: " << name << " " << options_metavar;
 
-        if (lookup.count("") > 0)
-        {
-            std::cout << " " << (*this)[""].metavar;
-        }
+        if (subcommands.size() > 0) std::cout << " [command]";
+        if (lookup.count("") > 0) std::cout << " " << (*this)[""].metavar;
         
         std::cout << std::endl;
         std::cout << std::endl;
@@ -310,13 +384,16 @@ struct context
         // TODO: Switch to different format when width > 40
         for(auto&& arg:arguments)
         {
-            auto txt = wrap(arg.help, total_width-width-2);
-            assert(!txt.empty());
-            std::cout << " " << std::setw(width) << arg.get_flags() << " " << txt[0] << std::endl;
-            std::for_each(txt.begin()+1, txt.end(), [&](std::string line)
+            show_help_col(arg.get_flags(), arg.help, width, total_width);
+        }
+        if (subcommands.size() > 0)
+        {
+            std::cout << std::endl;
+            std::cout << "Commands: " << std::endl << std::endl;
+            for(auto&& p:subcommands)
             {
-                std::cout << " " << std::setw(width) << " " << " " << line << std::endl;
-            });
+                show_help_col(p.first, p.second.help, width, total_width);
+            }
         }
         std::cout << std::endl;
     }
@@ -333,7 +410,7 @@ struct context
 template<class F>
 auto callback(F f)
 {
-    return [f](auto&& data, context& ctx, argument& a)
+    return [f](auto&& data, auto& ctx, argument& a)
     {
         a.add_callback([f, &ctx, &data](const argument& arg)
         {
@@ -345,7 +422,7 @@ auto callback(F f)
 template<class F>
 auto eager_callback(F f)
 {
-    return [f](auto&& data, context& ctx, argument& a)
+    return [f](auto&& data, auto& ctx, argument& a)
     {
         a.add_eager_callback([f, &data, &ctx](const argument& arg)
         {
@@ -358,7 +435,7 @@ auto eager_callback(F f)
 template<class T> \
 auto name(T&& x) \
 { \
-    return [=](auto&&, context&, argument& a) \
+    return [=](auto&&, auto&, argument& a) \
     { \
         a.name = x; \
     }; \
@@ -366,7 +443,7 @@ auto name(T&& x) \
 
 auto required()
 {
-    return [](auto&&, context&, argument& a)
+    return [](auto&&, auto&, argument& a)
     {
         a.required = true;
         a.add_callback([](const argument& arg)
@@ -380,16 +457,30 @@ auto required()
 ARGS_SET_ARG(help);
 ARGS_SET_ARG(metavar);
 
-template<class T>
-context build_context(T& cmd)
+template<class T, class F>
+auto try_parse(rank<1>, T& x, F f) ARGS_RETURNS(x.parse(f));
+
+template<class T, class F>
+void try_parse(rank<0>, T&, F) {}
+
+template<class C, class T>
+auto assign_subcommands(rank<1>, C& ctx, T&) -> decltype(T::subcommands, void())
+{ ctx.subcommands = T::subcommands; }
+
+template<class C, class T>
+void assign_subcommands(rank<0>, C&, T&) {}
+
+template<class... Ts, class T>
+context<T&, Ts...> build_context(T& cmd)
 {
-    context ctx;
+    context<T&, Ts...> ctx;
+    assign_subcommands(rank<1>{}, ctx, cmd);
     ctx.parse(nullptr, "-h", "--help", args::help("Show help"), 
-        eager_callback([](std::nullptr_t, const context& c, const argument&)
+        eager_callback([](std::nullptr_t, const auto& c, const argument&)
     {
-        c.show_help("program", "This program");
+        c.show_help(get_name<T>(), get_help<T>(), get_options_metavar<T>());
     }));
-    cmd.parse([&](auto&&... xs)
+    try_parse(rank<1>{}, cmd, [&](auto&&... xs)
     {
         ctx.parse(std::forward<decltype(xs)>(xs)...);
     });
@@ -420,13 +511,25 @@ std::tuple<std::string, std::string> parse_attached_value(const std::string& s)
     {
         return std::make_tuple(s, std::string());
     }
-
 }
 
-template<class T>
-void parse(T& cmd, std::vector<std::string> a)
+template<class Container>
+auto drop(Container c)
 {
-    context ctx = build_context(cmd);
+    c.pop_front();
+    return c;
+}
+
+template<class T, class... Ts>
+auto try_run(rank<2>, T& x, Ts&&... xs) ARGS_RETURNS(x.run(xs...));
+
+template<class T, class... Ts>
+auto try_run(rank<1>, T& x, Ts&&...) ARGS_RETURNS(x.run())
+
+template<class T, class... Ts>
+void parse(T& cmd, std::deque<std::string> a, Ts&&... xs)
+{
+    auto ctx = build_context<Ts...>(cmd);
 
     bool capture = false;
     std::string core;
@@ -454,21 +557,66 @@ void parse(T& cmd, std::vector<std::string> a)
         }
         else
         {
-            if (ctx[""].write(x)) return;
+            if (ctx.subcommands.count(x) > 0)
+            {
+                ctx.subcommands[x].run(drop(a), cmd, xs...);
+                break;
+            }
+            else if (ctx[""].write(x)) return;
         }
     }
     ctx.post_process();
 
-    cmd.run();
+    try_run(rank<2>{}, cmd, xs...);
 }
 
-template<class T>
-void parse(std::vector<std::string> a)
+template<class T, class... Ts>
+void parse(std::deque<std::string> a, Ts&&... xs)
 {
     // TODO: zero initialize T
     T cmd;
-    parse(cmd, std::move(a));
+    try
+    {
+        parse(cmd, std::move(a), xs...);
+    }
+    catch(const std::exception& ex)
+    {
+        std::cout << "Error: " << ex.what() << std::endl;
+    }
 }
+
+template<class T>
+void parse(int argc, char const *argv[])
+{
+    std::deque<std::string> as(argv+1, argv+argc);
+    parse<T>(as);
+}
+
+template<class Derived>
+struct group
+{
+    using context = context<Derived&>;
+    using subcommand = typename context::subcommand;
+    using subcommand_map = typename context::subcommand_map;
+    static subcommand_map subcommands;
+    
+    template<class T>
+    static void add_command()
+    {
+        subcommand sub;
+        sub.run = [](auto a, auto&&... xs)
+        {
+            parse<T>(a, xs...);
+        };
+        sub.help = get_help<T>();
+        subcommands.emplace(get_name<T>(), sub);
+    }
+
+    void run() {}
+};
+
+template<class Derived>
+typename group<Derived>::subcommand_map group<Derived>::subcommands = typename group<Derived>::subcommand_map();
 
 } // namespace args
 

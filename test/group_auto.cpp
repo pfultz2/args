@@ -24,12 +24,32 @@ struct delete_ : cli::command<delete_>
     }
 };
 
+struct custom_name : cli::command<custom_name>
+{
+    static const char* name() { return "run"; }
+    custom_name() {}
+    void run(cli& c)
+    {
+        c.name = "run";
+    }
+};
+
 PROVE_CASE()
 {
-    cli cmd1;
-    args::parse(cmd1, {"init"});
-    PROVE_CHECK(cmd1.name == "init");
+    cli cmd;
+    args::parse(cmd, {"init"});
+    PROVE_CHECK(cmd.name == "init");
+}
 
-    cli cmd2;
-    args::parse(cmd2, {"delete"});
+PROVE_CASE()
+{
+    cli cmd;
+    args::parse(cmd, {"run"});
+    PROVE_CHECK(cmd.name == "run");
+}
+
+PROVE_CASE()
+{
+    cli cmd;
+    args::parse(cmd, {"delete"});
 }

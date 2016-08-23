@@ -592,6 +592,25 @@ void parse(int argc, char const *argv[])
     parse<T>(as);
 }
 
+template<class T, class F>
+struct auto_register
+{
+    static bool auto_register_reg_;
+    static bool auto_register_reg_init_()
+    {
+        F::template apply<T>();
+        return true;
+    }
+
+    auto_register()
+    {
+        (void)auto_register_reg_;
+    }
+};
+
+template<class T, class F>
+bool auto_register<T, F>::auto_register_reg_ = auto_register<T, F>::auto_register_reg_init_();
+
 template<class Derived>
 struct group
 {
@@ -611,6 +630,16 @@ struct group
         sub.help = get_help<T>();
         subcommands.emplace(get_name<T>(), sub);
     }
+
+    struct auto_register_command
+    {
+        template<class T>
+        static void apply() { add_command<T>(); }
+    };
+
+    template<class D>
+    struct command : auto_register<D, auto_register_command>
+    {};
 
     void run() {}
 };

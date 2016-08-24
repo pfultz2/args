@@ -431,6 +431,18 @@ auto eager_callback(F f)
     };
 }
 
+template<class F>
+auto action(F f)
+{
+    return eager_callback([=](auto&&...) { f(); });
+}
+
+template<class T>
+auto show(T text)
+{
+    return action([=]{ std::cout << text << std::endl; });
+}
+
 #define ARGS_SET_ARG(name) \
 template<class T> \
 auto name(T&& x) \

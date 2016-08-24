@@ -97,3 +97,30 @@ PROVE_CASE()
     PROVE_CHECK(cmd.name == "");
     PROVE_CHECK(cmd.final_out == "hello");
 }
+
+struct action_null_cmd
+{
+    int count = 0;
+    std::string name;
+    std::string final_out;
+
+    template<class F>
+    void parse(F f)
+    {
+        f(nullptr, "--out", "-O", args::action([this]{ final_out = "hello"; }));
+        f(count, "--count", "-C");
+        f(name, "--name", "-N");
+    }
+
+    void run()
+    {}
+};
+
+PROVE_CASE()
+{
+    action_null_cmd cmd;
+    args::parse(cmd, {"--out", "--count", "5", "--name", "hello"});
+    PROVE_CHECK(cmd.count == 0);
+    PROVE_CHECK(cmd.name == "");
+    PROVE_CHECK(cmd.final_out == "hello");
+}

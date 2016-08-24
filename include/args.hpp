@@ -298,7 +298,6 @@ struct argument
         for(auto&& f:eager_callbacks) f(*this);
         return not eager_callbacks.empty();
     }
-
 };
 
 template<class... Args>
@@ -443,16 +442,6 @@ auto show(T text)
     return action([=]{ std::cout << text << std::endl; });
 }
 
-#define ARGS_SET_ARG(name) \
-template<class T> \
-auto name(T&& x) \
-{ \
-    return [=](auto&&, auto&, argument& a) \
-    { \
-        a.name = x; \
-    }; \
-}
-
 auto required()
 {
     return [](auto&&, auto&, argument& a)
@@ -464,6 +453,26 @@ auto required()
                 throw std::runtime_error("required arg missing: " + arg.get_flags());
         });
     };
+}
+
+template<class T>
+auto set(T value)
+{
+    return [value](auto&& data, auto&, argument& a)
+    {
+        a.type = argument_type::none;
+        a.write_value = [&data, value](const std::string&) { data = value; };
+    };
+}
+
+#define ARGS_SET_ARG(name) \
+template<class T> \
+auto name(T&& x) \
+{ \
+    return [=](auto&&, auto&, argument& a) \
+    { \
+        a.name = x; \
+    }; \
 }
 
 ARGS_SET_ARG(help);

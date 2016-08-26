@@ -561,7 +561,13 @@ void parse(T& cmd, std::deque<std::string> a, Ts&&... xs)
             // TODO: Check if flag exists
             std::string value;
             std::tie(core, value) = parse_attached_value(x);
-            if (ctx[core].type == argument_type::none or not value.empty())
+            if (ctx[core].type == argument_type::none)
+            {
+                capture = false;
+                if (ctx[core].write("")) return;
+                for(auto&& c:value) if (ctx[std::string("-") + c].write("")) return;
+            }
+            else if (not value.empty())
             {
                 capture = false;
                 if (ctx[core].write(value)) return;

@@ -11,7 +11,7 @@ struct callback_cmd
     void parse(F f)
     {
         auto cb = [this](auto& count, const auto&, const args::argument& arg) {
-            if (arg.has_value) for(int i=0;i<count;i++) final_name += name;
+            if (arg.count > 0) for(int i=0;i<count;i++) final_name += name;
         };
         f(count, "--count", "-C", args::callback(cb));
         f(name, "--name", "-N");

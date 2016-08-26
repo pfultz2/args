@@ -265,7 +265,7 @@ struct argument
     argument_type type;
     std::vector<std::string> flags;
 
-    bool has_value = false;
+    int count = 0;
     bool required = false;
     std::function<void(const std::string&)> write_value;
     std::vector<std::function<void(const argument&)>> callbacks;
@@ -294,7 +294,7 @@ struct argument
     bool write(const std::string& s)
     {
         write_value(s);
-        has_value = true;
+        count++;
         for(auto&& f:eager_callbacks) f(*this);
         return not eager_callbacks.empty();
     }
@@ -449,7 +449,7 @@ auto required()
         a.required = true;
         a.add_callback([](const argument& arg)
         {
-            if (arg.required and !arg.has_value)
+            if (arg.required and arg.count == 0)
                 throw std::runtime_error("required arg missing: " + arg.get_flags());
         });
     };
@@ -462,6 +462,19 @@ auto set(T value)
     {
         a.type = argument_type::none;
         a.write_value = [&data, value](const std::string&) { data = value; };
+    };
+}
+
+auto count()
+{
+    return [](auto&& data, auto&, argument& a)
+    {
+        a.type = argument_type::none;
+        a.add_callback([&data](const argument& arg)
+        {
+            data = arg.count;
+        });
+        a.write_value = [](const std::string&) {};
     };
 }
 

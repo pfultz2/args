@@ -2,6 +2,10 @@
 
 struct hello
 {
+    static const char* help()
+    {
+        return "Simple program that greets NAME for a total of COUNT times.";
+    }
     int count;
     std::string name;
 
@@ -21,7 +25,8 @@ struct hello
     }
 };
 
-int main(int argc, char const *argv[]) {
+int main(int argc, char const *argv[]) 
+{
     args::parse<hello>(argc, argv);
 }
 

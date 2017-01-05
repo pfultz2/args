@@ -99,7 +99,7 @@ void each_arg(F f, Ts&&... xs)
     (void)std::initializer_list<int>{((void)f(std::forward<Ts>(xs)), 0)...};     
 }
 
-std::vector<std::string> wrap(const std::string& text, int line_length = 72)
+std::vector<std::string> wrap(const std::string& text, unsigned int line_length = 72)
 {
     std::vector<std::string> output;
     std::istringstream iss(text);

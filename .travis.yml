@@ -95,6 +95,7 @@ install:
     - mkdir ${DEPS_DIR} && cd ${DEPS_DIR}
     - mkdir usr
     - export PATH=${DEPS_DIR}/usr/bin:${PATH}
+    - export PATH="/Users/travis/Library/Python/2.7/bin:$PATH"
     # Install cmake
     - CMAKE_URL="http://www.cmake.org/files/v3.3/cmake-3.3.1-Linux-x86_64.tar.gz"
     - if [[ "$LIBCXX" == "on" ]]; then travis_retry wget --no-check-certificate --quiet -O - ${CMAKE_URL} | tar --strip-components=1 -xz -C usr; fi

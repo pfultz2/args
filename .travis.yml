@@ -106,7 +106,7 @@ install:
     - which cmake
     - cmake --version
     # Install cget
-    - pip install --local cget
+    - pip install --user cget
     # Install Prove
     - cget -p ${DEPS_DIR}/usr install pfultz2/Prove
     # Install libc++

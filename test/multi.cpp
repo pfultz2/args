@@ -3,8 +3,8 @@
 
 struct multi_cmd
 {
-    bool verbose;
-    bool flag;
+    bool verbose = false;
+    bool flag = false;
 
     template<class F>
     void parse(F f)
@@ -20,7 +20,7 @@ struct multi_cmd
 
 PROVE_CASE()
 {
-    multi_cmd cmd{};
+    multi_cmd cmd;
     args::parse(cmd, {"--verbose", "--flag"});
     PROVE_CHECK(cmd.verbose == true);
     PROVE_CHECK(cmd.flag == true);
@@ -28,7 +28,7 @@ PROVE_CASE()
 
 PROVE_CASE()
 {
-    multi_cmd cmd{};
+    multi_cmd cmd;
     args::parse(cmd, {"-v", "-f"});
     PROVE_CHECK(cmd.verbose == true);
     PROVE_CHECK(cmd.flag == true);
@@ -36,7 +36,7 @@ PROVE_CASE()
 
 PROVE_CASE()
 {
-    multi_cmd cmd{};
+    multi_cmd cmd;
     args::parse(cmd, {"--verbose", "-f"});
     PROVE_CHECK(cmd.verbose == true);
     PROVE_CHECK(cmd.flag == true);
@@ -44,7 +44,7 @@ PROVE_CASE()
 
 PROVE_CASE()
 {
-    multi_cmd cmd{};
+    multi_cmd cmd;
     args::parse(cmd, {"-v", "--flag"});
     PROVE_CHECK(cmd.verbose == true);
     PROVE_CHECK(cmd.flag == true);
@@ -52,7 +52,7 @@ PROVE_CASE()
 
 PROVE_CASE()
 {
-    multi_cmd cmd{};
+    multi_cmd cmd;
     args::parse(cmd, {"-v"});
     PROVE_CHECK(cmd.verbose == true);
     PROVE_CHECK(cmd.flag == false);
@@ -60,7 +60,7 @@ PROVE_CASE()
 
 PROVE_CASE()
 {
-    multi_cmd cmd{};
+    multi_cmd cmd;
     args::parse(cmd, {"-f"});
     PROVE_CHECK(cmd.verbose == false);
     PROVE_CHECK(cmd.flag == true);
@@ -68,7 +68,7 @@ PROVE_CASE()
 
 PROVE_CASE()
 {
-    multi_cmd cmd{};
+    multi_cmd cmd;
     args::parse(cmd, {"-vf"});
     PROVE_CHECK(cmd.verbose == true);
     PROVE_CHECK(cmd.flag == true);
@@ -76,7 +76,7 @@ PROVE_CASE()
 
 PROVE_CASE()
 {
-    multi_cmd cmd{};
+    multi_cmd cmd;
     args::parse(cmd, {"-qf"});
     PROVE_CHECK(cmd.verbose == false);
     PROVE_CHECK(cmd.flag == true);

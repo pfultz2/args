@@ -499,7 +499,7 @@ void try_parse(rank<0>, T&, F) {}
 
 template<class C, class T>
 auto assign_subcommands(rank<1>, C& ctx, T&) -> decltype(T::subcommands, void())
-{ ctx.subcommands = T::subcommands; }
+{ ctx.subcommands = T::subcommands(); }
 
 template<class C, class T>
 void assign_subcommands(rank<0>, C&, T&) {}
@@ -657,7 +657,12 @@ struct group
     using context_type = context<Derived&>;
     using subcommand_type = typename context_type::subcommand_type;
     using subcommand_map = typename context_type::subcommand_map;
-    static subcommand_map subcommands;
+
+    static subcommand_map& subcommands()
+    {
+        static subcommand_map subcommands_;
+        return subcommands_;
+    }
     
     template<class T>
     static void add_command()
@@ -668,7 +673,7 @@ struct group
             parse<T>(a, xs...);
         };
         sub.help = get_help<T>();
-        subcommands.emplace(get_name<T>(), sub);
+        subcommands().emplace(get_name<T>(), sub);
     }
 
     struct auto_register_command
@@ -683,9 +688,6 @@ struct group
 
     void run() {}
 };
-
-template<class Derived>
-typename group<Derived>::subcommand_map group<Derived>::subcommands = typename group<Derived>::subcommand_map();
 
 } // namespace args
 

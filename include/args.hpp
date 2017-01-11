@@ -310,8 +310,8 @@ struct subcommand
 template<class... Args>
 struct context
 {
-    using subcommand = subcommand<Args...>;
-    using subcommand_map = std::map<std::string, subcommand>;
+    using subcommand_type = subcommand<Args...>;
+    using subcommand_map = std::map<std::string, subcommand_type>;
     std::vector<argument> arguments;
     std::unordered_map<std::string, int> lookup;
     subcommand_map subcommands;
@@ -654,15 +654,15 @@ bool auto_register<T, F>::auto_register_reg_ = auto_register<T, F>::auto_registe
 template<class Derived>
 struct group
 {
-    using context = context<Derived&>;
-    using subcommand = typename context::subcommand;
-    using subcommand_map = typename context::subcommand_map;
+    using context_type = context<Derived&>;
+    using subcommand_type = typename context_type::subcommand_type;
+    using subcommand_map = typename context_type::subcommand_map;
     static subcommand_map subcommands;
     
     template<class T>
     static void add_command()
     {
-        subcommand sub;
+        subcommand_type sub;
         sub.run = [](auto a, auto&&... xs)
         {
             parse<T>(a, xs...);

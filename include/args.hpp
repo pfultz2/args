@@ -99,6 +99,9 @@ void each_arg(F f, Ts&&... xs)
     (void)std::initializer_list<int>{((void)f(std::forward<Ts>(xs)), 0)...};     
 }
 
+template<class F>
+void each_arg(F) {}
+
 std::vector<std::string> wrap(const std::string& text, unsigned int line_length = 72)
 {
     std::vector<std::string> output;
@@ -251,7 +254,7 @@ std::string type_to_help_impl(rank<0>)
 template<class T>
 auto type_to_help_impl(rank<1>) -> typename std::enable_if<(is_container<T>() and not std::is_convertible<T, std::string>()), std::string>::type
 {
-    if (is_container<T>()) return type_to_help_impl<value_of<T>>(rank<1>{}) + "...";
+    return type_to_help_impl<value_of<T>>(rank<1>{}) + "...";
 }
 
 template<class T>

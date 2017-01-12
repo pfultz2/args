@@ -71,11 +71,15 @@ template<class Range>
 using value_of = std::decay_t<decltype(*adl_args::adl_begin(std::declval<Range>()))>;
 
 template<class F1, class... Fs>
-struct overload_set : F1, overload_set<Fs...>
+struct overload_set;
+
+template<class F1, class F2, class... Fs>
+struct overload_set<F1, F2, Fs...> : F1, overload_set<F2, Fs...>
 {
     using F1::operator();
-    using overload_set<Fs...>::operator();
-    overload_set(F1 f1, Fs... fs) : F1(f1), overload_set<Fs...>(fs...) 
+    using overload_set<F2, Fs...>::operator();
+    overload_set(F1 f1, F2 f2, Fs... fs) 
+    : F1(std::move(f1)), overload_set<F2, Fs...>(std::move(f2), std::move(fs)...) 
     {}
 };
 
@@ -83,24 +87,33 @@ template<class F1>
 struct overload_set<F1> : F1
 {
     using F1::operator();
-    overload_set(F1 f1) : F1(f1) 
+    overload_set(F1 f1) : F1(std::move(f1)) 
     {}
 };
 
 template<class... Fs>
 overload_set<Fs...> overload(Fs... fs) 
 {
-    return {fs...};
-}
-
-template<class F, class... Ts>
-void each_arg(F f, Ts&&... xs)
-{
-    (void)std::initializer_list<int>{((void)f(std::forward<Ts>(xs)), 0)...};     
+    return {std::move(fs)...};
 }
 
 template<class F>
 void each_arg(F) {}
+
+#ifdef __clang__
+template<class F, class T, class... Ts>
+void each_arg(F f, T&& x, Ts&&... xs)
+{
+    f(std::forward<T>(x));
+    args::each_arg(f, std::forward<Ts>(xs)...);
+}
+#else
+template<class F, class... Ts>
+void each_arg(F f, Ts&&... xs)
+{
+    (void)std::initializer_list<int>{((void)(f(std::forward<Ts>(xs))), 0)...};     
+}
+#endif
 
 std::vector<std::string> wrap(const std::string& text, unsigned int line_length = 72)
 {
@@ -186,7 +199,7 @@ auto get_ ## name() ARGS_RETURNS(detail::get_ ## name ## _impl<T>(rank<1>{}));
 template<class T>
 std::string get_command_type_name()
 {
-    std::string name = get_type_name<T>();
+    std::string name = args::get_type_name<T>();
     auto i = name.find("::");
     if (i != std::string::npos) name = name.substr(i+2);
     return trim(name, [](char c) { return c == '_'; });
@@ -254,13 +267,13 @@ std::string type_to_help_impl(rank<0>)
 template<class T>
 auto type_to_help_impl(rank<1>) -> typename std::enable_if<(is_container<T>() and not std::is_convertible<T, std::string>()), std::string>::type
 {
-    return type_to_help_impl<value_of<T>>(rank<1>{}) + "...";
+    return args::type_to_help_impl<value_of<T>>(rank<1>{}) + "...";
 }
 
 template<class T>
 std::string type_to_help(const T&)
 {
-    return "[" + type_to_help_impl<T>(rank<1>{}) + "]";
+    return "[" + args::type_to_help_impl<T>(rank<1>{}) + "]";
 }
 
 struct argument
@@ -296,7 +309,7 @@ struct argument
 
     bool write(const std::string& s)
     {
-        write_value(s);
+        this->write_value(s);
         count++;
         for(auto&& f:eager_callbacks) f(*this);
         return not eager_callbacks.empty();
@@ -330,10 +343,10 @@ struct context
     void parse(T&& x, Ts&&... xs)
     {
         argument arg;
-        arg.write_value = [&x](const std::string& s) { write_value_to(x, s); };
-        arg.type = get_argument_type(x);
-        arg.metavar = type_to_help(x);
-        each_arg(overload(
+        arg.write_value = [&x](const std::string& s) { args::write_value_to(x, s); };
+        arg.type = args::get_argument_type(x);
+        arg.metavar = args::type_to_help(x);
+        args::each_arg(args::overload(
             [&, this](const std::string& name) { arg.flags.push_back(name); },
             [&, this](auto&& attribute) -> decltype(attribute(x, *this, arg), void()) { attribute(x, *this, arg); }
         ), std::forward<Ts>(xs)...);
@@ -352,7 +365,7 @@ struct context
 
     void show_help_col(std::string item, std::string help, int width, int total_width) const
     {
-        auto txt = wrap(help, total_width-width-2);
+        auto txt = args::wrap(help, total_width-width-2);
         assert(!txt.empty());
         std::cout << " " << std::setw(width) << item << " " << txt[0] << std::endl;
         std::for_each(txt.begin()+1, txt.end(), [&](std::string line)
@@ -380,13 +393,13 @@ struct context
         
         std::cout << std::endl;
         std::cout << std::endl;
-        for(auto line:wrap(description, total_width-2)) std::cout << "  " << line << std::endl;
+        for(auto line:args::wrap(description, total_width-2)) std::cout << "  " << line << std::endl;
         std::cout << std::endl;
         std::cout << "Options: " << std::endl << std::endl;
         // TODO: Switch to different format when width > 40
         for(auto&& arg:arguments)
         {
-            show_help_col(arg.get_flags(), arg.help, width, total_width);
+            this->show_help_col(arg.get_flags(), arg.help, width, total_width);
         }
         if (subcommands.size() > 0)
         {
@@ -394,7 +407,7 @@ struct context
             std::cout << "Commands: " << std::endl << std::endl;
             for(auto&& p:subcommands)
             {
-                show_help_col(p.first, p.second.help, width, total_width);
+                this->show_help_col(p.first, p.second.help, width, total_width);
             }
         }
         std::cout << std::endl;
@@ -436,7 +449,7 @@ auto eager_callback(F f)
 template<class F>
 auto action(F f)
 {
-    return eager_callback([=](auto&&...) { f(); });
+    return args::eager_callback([=](auto&&...) { f(); });
 }
 
 template<class T>
@@ -511,13 +524,13 @@ template<class... Ts, class T>
 context<T&, Ts...> build_context(T& cmd)
 {
     context<T&, Ts...> ctx;
-    assign_subcommands(rank<1>{}, ctx, cmd);
+    args::assign_subcommands(rank<1>{}, ctx, cmd);
     ctx.parse(nullptr, "-h", "--help", args::help("Show help"), 
-        eager_callback([](std::nullptr_t, const auto& c, const argument&)
+        args::eager_callback([](std::nullptr_t, const auto& c, const argument&)
     {
         c.show_help(get_name<T>(), get_help<T>(), get_options_metavar<T>());
     }));
-    try_parse(rank<1>{}, cmd, [&](auto&&... xs)
+    args::try_parse(rank<1>{}, cmd, [&](auto&&... xs)
     {
         ctx.parse(std::forward<decltype(xs)>(xs)...);
     });
@@ -538,7 +551,7 @@ std::tuple<std::string, std::string> parse_attached_value(const std::string& s)
     if (s[1] == '-')
     {
         auto it = std::find(s.begin(), s.end(), '=');
-        return std::make_tuple(std::string(s.begin(), it), pop_string(it, s.end()));
+        return std::make_tuple(std::string(s.begin(), it), args::pop_string(it, s.end()));
     }
     else if (s.size() > 2)
     {
@@ -566,7 +579,7 @@ auto try_run(rank<1>, T& x, Ts&&...) ARGS_RETURNS(x.run())
 template<class T, class... Ts>
 void parse(T& cmd, std::deque<std::string> a, Ts&&... xs)
 {
-    auto ctx = build_context<Ts...>(cmd);
+    auto ctx = args::build_context<Ts...>(cmd);
 
     bool capture = false;
     std::string core;
@@ -576,7 +589,7 @@ void parse(T& cmd, std::deque<std::string> a, Ts&&... xs)
         {
             // TODO: Check if flag exists
             std::string value;
-            std::tie(core, value) = parse_attached_value(x);
+            std::tie(core, value) = args::parse_attached_value(x);
             if (ctx[core].type == argument_type::none)
             {
                 capture = false;
@@ -610,7 +623,7 @@ void parse(T& cmd, std::deque<std::string> a, Ts&&... xs)
     }
     ctx.post_process();
 
-    try_run(rank<2>{}, cmd, xs...);
+    args::try_run(rank<2>{}, cmd, xs...);
 }
 
 template<class T, class... Ts>
@@ -620,7 +633,7 @@ void parse(std::deque<std::string> a, Ts&&... xs)
     T cmd;
     try
     {
-        parse(cmd, std::move(a), xs...);
+        args::parse(cmd, std::move(a), xs...);
     }
     catch(const std::exception& ex)
     {
@@ -632,7 +645,7 @@ template<class T>
 void parse(int argc, char const *argv[])
 {
     std::deque<std::string> as(argv+1, argv+argc);
-    parse<T>(as);
+    args::parse<T>(as);
 }
 
 template<class T, class F>
@@ -673,7 +686,7 @@ struct group
         subcommand_type sub;
         sub.run = [](auto a, auto&&... xs)
         {
-            parse<T>(a, xs...);
+            args::parse<T>(a, xs...);
         };
         sub.help = get_help<T>();
         subcommands().emplace(get_name<T>(), sub);

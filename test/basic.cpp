@@ -1,6 +1,5 @@
 #include <args.hpp>
 #include "test.hpp"
-
 struct single_value_cmd
 {
     int count;

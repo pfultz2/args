@@ -10,24 +10,24 @@ matrix:
           os: osx
           compiler: clang
 
-        - env: CLANG_VERSION=3.5 ASAN=on LIBCXX=on
+        - env: CLANG_VERSION=3.6 ASAN=on LIBCXX=on
           os: linux
-          compiler: clang-3.5
-          addons: &clang35
+          compiler: clang-3.6
+          addons: &clang36
             apt:
               packages:
                 - util-linux
                 - g++-4.9
-                - clang-3.5
+                - clang-3.6
                 - valgrind
                 - python-pip
               sources:
                 - ubuntu-toolchain-r-test
 
-        - env: CLANG_VERSION=3.5 ASAN=on LIBCXX=off
+        - env: CLANG_VERSION=3.6 ASAN=on LIBCXX=off
           os: linux
-          compiler: clang-3.5
-          addons: *clang35
+          compiler: clang-3.6
+          addons: *clang36
 
         - env: CLANG_VERSION=3.8 ASAN=off LIBCXX=on
           os: linux

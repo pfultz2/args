@@ -449,7 +449,6 @@ auto eager_callback(F f)
 template<class F>
 auto action(F f)
 {
-    // return args::eager_callback([=](auto&&...) { f(); });
     return args::eager_callback(std::bind(f));
 }
 

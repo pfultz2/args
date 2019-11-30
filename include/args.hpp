@@ -222,6 +222,15 @@ struct value_parser
     }
 };
 
+template<>
+struct value_parser<std::string>
+{
+    static std::string apply(const std::string& x)
+    {
+        return x;
+    }
+};
+
 template<class T, typename std::enable_if<(not is_container<T>{} or std::is_convertible<T, std::string>{}), int>::type = 0>
 void write_value_to(T& result, const std::string& x)
 {

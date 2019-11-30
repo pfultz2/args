@@ -56,6 +56,14 @@ PROVE_CASE()
     PROVE_CHECK(cmd.name == "hello");
 }
 
+PROVE_CASE()
+{
+    single_value_cmd cmd;
+    args::parse(cmd, {"-N", "Nobody, or am I?", "-C", "4"});
+    PROVE_CHECK(cmd.count == 4);
+    PROVE_CHECK(cmd.name == "Nobody, or am I?");
+}
+
 struct multi_value_cmd
 {
     int count;

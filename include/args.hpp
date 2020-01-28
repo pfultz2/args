@@ -347,7 +347,7 @@ struct context
         arg.type = args::get_argument_type(x);
         arg.metavar = args::type_to_help(x);
         args::each_arg(args::overload(
-            [&, this](const std::string& name) { arg.flags.push_back(name); },
+            [&](const std::string& name) { arg.flags.push_back(name); },
             [&, this](auto&& attribute) -> decltype(attribute(x, *this, arg), void()) { attribute(x, *this, arg); }
         ), std::forward<Ts>(xs)...);
         this->add(std::move(arg));

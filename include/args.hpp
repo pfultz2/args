@@ -347,7 +347,7 @@ struct context
         arg.type = args::get_argument_type(x);
         arg.metavar = args::type_to_help(x);
         args::each_arg(args::overload(
-            [&, this](const std::string& name) { arg.flags.push_back(name); },
+            [&](const std::string& name) { arg.flags.push_back(name); },
             [&, this](auto&& attribute) -> decltype(attribute(x, *this, arg), void()) { attribute(x, *this, arg); }
         ), std::forward<Ts>(xs)...);
         this->add(std::move(arg));
@@ -355,11 +355,21 @@ struct context
 
     argument& operator[](const std::string& flag)
     {
+        if (lookup.find(flag) == lookup.end())
+        {
+            throw std::runtime_error("unknown flag: " + flag);
+        }
+        //else
         return arguments[lookup.at(flag)];
     }
 
     const argument& operator[](const std::string& flag) const
     {
+        if (lookup.find(flag) == lookup.end())
+        {
+            throw std::runtime_error("unknown flag: " + flag);
+        }
+        //else
         return arguments[lookup.at(flag)];
     }
 
@@ -587,7 +597,6 @@ void parse(T& cmd, std::deque<std::string> a, Ts&&... xs)
     {
         if (x[0] == '-')
         {
-            // TODO: Check if flag exists
             std::string value;
             std::tie(core, value) = args::parse_attached_value(x);
             if (ctx[core].type == argument_type::none)

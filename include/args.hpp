@@ -329,7 +329,7 @@ struct context
     using subcommand_type = subcommand<Args...>;
     using subcommand_map = std::map<std::string, subcommand_type>;
     std::vector<argument> arguments;
-    std::unordered_map<std::string, int> lookup;
+    std::unordered_map<std::string, std::size_t> lookup;
     subcommand_map subcommands;
 
     void add(argument arg)

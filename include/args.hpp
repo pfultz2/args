@@ -640,14 +640,7 @@ void parse(std::deque<std::string> a, Ts&&... xs)
 {
     // TODO: zero initialize T
     T cmd;
-    try
-    {
-        args::parse(cmd, std::move(a), xs...);
-    }
-    catch(const std::exception& ex)
-    {
-        std::cout << "Error: " << ex.what() << std::endl;
-    }
+    args::parse(cmd, std::move(a), xs...);
 }
 
 template<class T>

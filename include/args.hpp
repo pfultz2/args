@@ -353,9 +353,14 @@ struct context
         this->add(std::move(arg));
     }
 
+    bool is_known_flag(const std::string& flag) const noexcept
+    {
+        return lookup.find(flag) != lookup.end();
+    }
+
     argument& operator[](const std::string& flag)
     {
-        if (lookup.find(flag) == lookup.end())
+        if (!is_known_flag(flag))
         {
             throw std::runtime_error("unknown flag: " + flag);
         }
@@ -365,7 +370,7 @@ struct context
 
     const argument& operator[](const std::string& flag) const
     {
-        if (lookup.find(flag) == lookup.end())
+        if (!is_known_flag(flag))
         {
             throw std::runtime_error("unknown flag: " + flag);
         }
@@ -627,7 +632,14 @@ void parse(T& cmd, std::deque<std::string> a, Ts&&... xs)
                 ctx.subcommands[x].run(drop(a), cmd, xs...);
                 break;
             }
-            else if (ctx[""].write(x)) return;
+            else if (ctx.is_known_flag(""))
+            {
+                if (ctx[""].write(x)) return;
+            }
+            else
+            {
+                throw std::runtime_error("unrecognized arg: " + x);
+            }
         }
     }
     ctx.post_process();
